@@ -11,7 +11,7 @@ sys.setrecursionlimit(2000)
 # --- KONFIGURASI ---
 INITIAL_COUNT = 50      # Jumlah angka awal
 TOTAL_DAYS = 14         # Durasi simulasi per bulan
-TOTAL_MONTHS = 10       # Jumlah bulan (trials)
+TOTAL_MONTHS = 4       # Jumlah bulan (trials)
 MIN_VALUE = 1           # Nilai random minimal
 MAX_VALUE = 50          # Nilai random maksimal
 MIN_GROWTH = 0.01       # Pertumbuhan minimal (1%)
@@ -25,15 +25,16 @@ def generate_simulation_data(months: int, days: int, start_count: int) -> Dict[s
     """
     full_data = {}
 
+    current_values = None
+
     for month in range(1, months + 1):
         month_key = f"bulan_{month}"
         month_data = {}
-        current_values = None
         
         print(f"\n--- Generating {month_key} ---")
 
         for day in range(1, days + 1):
-            if day == 1:
+            if month == 1 and day == 1:
                 current_values = np.random.randint(MIN_VALUE, MAX_VALUE, start_count)
             else:
                 # Pertumbuhan acak
