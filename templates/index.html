@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sorting Algorithm Benchmark</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f5f5f5; padding: 20px; }
+        .container { max-width: 1200px; margin: 0 auto; }
+        h1 { text-align: center; color: #333; margin-bottom: 20px; }
+        .controls { background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); margin-bottom: 20px; display: flex; gap: 20px; flex-wrap: wrap; align-items: end; }
+        .control-group { display: flex; flex-direction: column; gap: 5px; }
+        label { font-weight: 500; color: #555; font-size: 14px; }
+        input { padding: 8px 12px; border: 1px solid #ddd; border-radius: 4px; width: 120px; }
+        button { padding: 10px 24px; background: #4CAF50; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 14px; }
+        button:hover { background: #45a049; }
+        button:disabled { background: #ccc; cursor: not-allowed; }
+        .charts { display: grid; grid-template-columns: repeat(auto-fit, minmax(500px, 1fr)); gap: 20px; }
+        .chart-card { background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        .chart-card h3 { margin-bottom: 15px; color: #333; }
+        .loading { text-align: center; padding: 40px; color: #666; }
+        .avg-chart { grid-column: 1 / -1; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔄 Sorting Algorithm Benchmark</h1>
+        
+        <div class="controls">
+            <div class="control-group">
+                <label>Months (Trials)</label>
+                <input type="number" id="months" value="4" min="1" max="10">
+            </div>
+            <div class="control-group">
+                <label>Days per Month</label>
+                <input type="number" id="days" value="14" min="1" max="30">
+            </div>
+            <div class="control-group">
+                <label>Initial Array Size</label>
+                <input type="number" id="startCount" value="50" min="10" max="500">
+            </div>
+            <button id="runBtn" onclick="runBenchmark()">Run Benchmark</button>
+        </div>
+        
+        <div id="results"></div>
+    </div>
+
+    <script>
+        let charts = [];
+
+        async function runBenchmark() {
+            const btn = document.getElementById('runBtn');
+            const resultsDiv = document.getElementById('results');
+            
+            btn.disabled = true;
+            btn.textContent = 'Running...';
+            resultsDiv.innerHTML = '<div class="loading">⏳ Running benchmark, please wait...</div>';
+            
+            // Destroy existing charts
+            charts.forEach(c => c.destroy());
+            charts = [];
+
+            const params = {
+                months: parseInt(document.getElementById('months').value),
+                days: parseInt(document.getElementById('days').value),
+                start_count: parseInt(document.getElementById('startCount').value)
+            };
+
+            try {
+                const response = await fetch('/api/benchmark', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(params)
+                });
+                const data = await response.json();
+                renderCharts(data, params.days);
+            } catch (error) {
+                resultsDiv.innerHTML = `<div class="loading">❌ Error: ${error.message}</div>`;
+            }
+            
+            btn.disabled = false;
+            btn.textContent = 'Run Benchmark';
+        }
+
+        function renderCharts(data, totalDays) {
+            const resultsDiv = document.getElementById('results');
+            resultsDiv.innerHTML = '<div class="charts" id="chartsContainer"></div>';
+            const container = document.getElementById('chartsContainer');
+            
+            const months = Object.keys(data).sort((a, b) => parseInt(a.split('_')[1]) - parseInt(b.split('_')[1]));
+            
+            // Individual month charts
+            months.forEach(month => {
+                const card = document.createElement('div');
+                card.className = 'chart-card';
+                card.innerHTML = `<h3>${month.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase())}</h3><canvas id="chart-${month}"></canvas>`;
+                container.appendChild(card);
+                
+                const ctx = document.getElementById(`chart-${month}`).getContext('2d');
+                const chart = new Chart(ctx, {
+                    type: 'line',
+                    data: {
+                        labels: data[month].sizes,
+                        datasets: [
+                            { label: 'Insertion Sort', data: data[month].insertion_times, borderColor: '#FF6384', backgroundColor: 'rgba(255,99,132,0.1)', tension: 0.1 },
+                            { label: 'Merge Sort', data: data[month].merge_times, borderColor: '#36A2EB', backgroundColor: 'rgba(54,162,235,0.1)', tension: 0.1 }
+                        ]
+                    },
+                    options: { responsive: true, scales: { x: { title: { display: true, text: 'Array Size' } }, y: { title: { display: true, text: 'Time (s)' } } } }
+                });
+                charts.push(chart);
+            });
+
+            // Average chart
+            const avgData = calculateAverage(data, totalDays);
+            const avgCard = document.createElement('div');
+            avgCard.className = 'chart-card avg-chart';
+            avgCard.innerHTML = `<h3>📊 Average Across All Months</h3><canvas id="chart-avg"></canvas>`;
+            container.appendChild(avgCard);
+            
+            const avgCtx = document.getElementById('chart-avg').getContext('2d');
+            const avgChart = new Chart(avgCtx, {
+                type: 'line',
+                data: {
+                    labels: avgData.sizes,
+                    datasets: [
+                        { label: 'Avg Insertion Sort', data: avgData.insertion, borderColor: '#FF6384', borderWidth: 3, tension: 0.1 },
+                        { label: 'Avg Merge Sort', data: avgData.merge, borderColor: '#36A2EB', borderWidth: 3, tension: 0.1 }
+                    ]
+                },
+                options: { responsive: true, scales: { x: { title: { display: true, text: 'Avg Array Size' } }, y: { title: { display: true, text: 'Avg Time (s)' } } } }
+            });
+            charts.push(avgChart);
+        }
+
+        function calculateAverage(data, totalDays) {
+            const agg = {};
+            for (let i = 1; i <= totalDays; i++) agg[i] = { sizes: [], insertion: [], merge: [] };
+            
+            Object.values(data).forEach(month => {
+                month.days.forEach((day, idx) => {
+                    const dayNum = parseInt(day.split('_')[1]);
+                    agg[dayNum].sizes.push(month.sizes[idx]);
+                    agg[dayNum].insertion.push(month.insertion_times[idx]);
+                    agg[dayNum].merge.push(month.merge_times[idx]);
+                });
+            });
+
+            const avg = (arr) => arr.reduce((a, b) => a + b, 0) / arr.length;
+            const sizes = [], insertion = [], merge = [];
+            
+            for (let i = 1; i <= totalDays; i++) {
+                sizes.push(avg(agg[i].sizes).toFixed(0));
+                insertion.push(avg(agg[i].insertion));
+                merge.push(avg(agg[i].merge));
+            }
+            
+            return { sizes, insertion, merge };
+        }
+    </script>
+</body>
+</html>
